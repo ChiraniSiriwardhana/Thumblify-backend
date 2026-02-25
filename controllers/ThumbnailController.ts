@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import Thumbnail from "../models/Thumbnail.js";
 import { isGeneratorFunction } from "node:util/types";
-import { GenerateContentConfig, HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { config } from "dotenv";
 import ai from "../configs/ai.js";
 import { model } from "mongoose";
@@ -55,6 +54,12 @@ export const generateThumbnail = async (req: Request, res: Response) => {
         const { userId} = req.session;
         const { title, prompt:user_prompt,  style, aspect_ratio, color_scheme, text_overlay}= req.body;
 
+        console.log('Generate thumbnail request:', { userId, title, style, aspect_ratio, color_scheme });
+
+        if (!userId) {
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
+
         const thumbnail = new Thumbnail ({
             userId,
             title,
@@ -66,93 +71,67 @@ export const generateThumbnail = async (req: Request, res: Response) => {
             isGenerating: true,
         })
 
-        const model = 'gemini-3-pro-image-preview';
-
-        const generationConfig: GenerateContentConfig= {
-            maxOutputTokens: 32768,
-            temperature: 1,
-            topP: 0.95,
-            responseModalities: ['image'],
-            imageConfig: {
-                aspectRatio:aspect_ratio || '16:9',
-                imageSize: '1K',
-            },
-            safetySettings: [
-                {   category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold: HarmBlockThreshold.OFF},
-                {  category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold: HarmBlockThreshold.OFF},
-                { category:HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold: HarmBlockThreshold.OFF},
-                { category:HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold: HarmBlockThreshold.OFF},
-            ]
-
-        }
-
-
+        // Build the prompt for image generation
         let prompt = `Create a ${stylePrompts[style as keyof typeof stylePrompts]} for:"${title}"`;
         if(color_scheme){
             prompt += ` using a ${colorSchemeDescriptions[color_scheme as keyof typeof colorSchemeDescriptions]} color scheme.`
         }
         if(user_prompt){
-            prompt += `Additional details: ${user_prompt}`;
+            prompt += ` Additional details: ${user_prompt}`;
         }
-        prompt += `The thumbnail should be ${aspect_ratio} , visuallly stunning, and designed to maximize click-through rate. Make it bold,professional and impossible to ignore.`
+        prompt += ` The thumbnail should be ${aspect_ratio}, visually stunning, and designed to maximize click-through rate. Make it bold, professional and impossible to ignore.`
 
-        //generate the image using ai model
+        console.log('Generated prompt:', prompt);
 
-        const response: any =await ai.models.generateContent({
-            model, 
-            contents:[prompt],
-            config: generationConfig
-        })
+        // Generate the image using Hugging Face Inference API
+        // Using FLUX.1 Schnell - fast and reliable image generation model
+        console.log('Calling Hugging Face API...');
+        console.log('Using API key:', process.env.HF_API_KEY?.substring(0, 10) + '...');
+        
+        const imageBlob: any = await ai.textToImage({
+            model: 'black-forest-labs/FLUX.1-schnell',
+            inputs: prompt,
+        });
+        console.log('Image generated successfully');
 
-        //check if the response is valid
+        // Convert the blob response to buffer
+        const arrayBuffer = await imageBlob.arrayBuffer();
+        const finalBuffer = Buffer.from(arrayBuffer);
 
-        if(!response?.candidates?.[0]?.content?.parts){
-            throw new Error('Invalid response from AI model');
-        }
-        const parts = response.candidates[0].content.parts;
-        let finalBuffer: Buffer | null = null;
+        console.log('Image buffer size:', finalBuffer.length);
 
-        for(const part of parts){
-            if(part.inlineData){
-                finalBuffer = Buffer.from(part.inlineData.data, 'base64');
-                break;
-            }
-        }
-
-        const filename =`final-output-${Date.now()}.png`;
-        const filePath = path.join('images',filename);
+        const filename = `final-output-${Date.now()}.png`;
+        const filePath = path.join('images', filename);
 
         //create the images directory if it doesnt exist
-
         fs.mkdirSync('images', { recursive: true });
 
         //Write the final image to the file
+        fs.writeFileSync(filePath, finalBuffer);
+        console.log('Image saved to:', filePath);
 
-        fs.writeFileSync(filePath, finalBuffer!);
-
+        // Upload to Cloudinary
+        console.log('Uploading to Cloudinary...');
         const uploadResult = await cloudinary.uploader.upload(filePath, {
             resource_type:'image'
-            
-        })
+        });
+        console.log('Uploaded to Cloudinary:', uploadResult.secure_url);
+
         thumbnail.imageUrl = uploadResult.secure_url;
         thumbnail.isGenerating = false;
         await thumbnail.save();
 
-        res.json({ message: 'Thumbnail generated successfully', thumbnail})
+        res.json({ message: 'Thumbnail generated successfully', thumbnail});
 
-        //remove image file  from disk
-
+        //remove image file from disk
         fs.unlinkSync(filePath);
-
 
     }
     catch (error: any) {
         console.error('Error generating thumbnail:', error);
-        res.status(500).json({ error: 'Failed to generate thumbnail' });
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ error: 'Failed to generate thumbnail', details: error.message });
 
 
     }

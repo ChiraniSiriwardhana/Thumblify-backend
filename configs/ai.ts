@@ -1,7 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+import { HfInference } from "@huggingface/inference";
 
-const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY as string,
+const ai = new HfInference(process.env.HF_API_KEY as string);
 
-})
 export default ai;
