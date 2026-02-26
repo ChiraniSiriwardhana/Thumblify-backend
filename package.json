@@ -13,7 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@google/genai": "^1.42.0",
+    "@huggingface/inference": "^4.13.13",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.9.0",
     "connect-mongo": "^6.0.0",

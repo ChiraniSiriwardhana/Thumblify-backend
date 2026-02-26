@@ -8,22 +8,28 @@ export const registerUser = async (req: Request, res: Response) => {
     try{
         const{ name, email, password } = req.body;
 
+        console.log('Registration attempt:', { name, email });
+
         // find user by email
         const user = await User.findOne({ email });
         if(user){
+            console.log('User already exists');
             return res.status(400).json({ message: "User already exists" });
         }
         //encrypt the password
         const salt=await bcrypt.genSalt(10);
         const hashedPassword=await bcrypt.hash(password, salt);
 
+        console.log('Creating new user...');
         const newUser =new User({
             name,
             email,
             password: hashedPassword
         });
 
-        await newUser.save();
+        console.log('Attempting to save user...');
+        const savedUser = await newUser.save();
+        console.log('User saved successfully:', savedUser._id);
 
         //setting user data in session
         req.session.isLoggedIn = true;
