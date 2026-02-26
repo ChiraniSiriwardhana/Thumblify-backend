@@ -31,9 +31,11 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true if using HTTPS
+        secure: process.env.NODE_ENV === 'production', // Set to true if using HTTPS othrewise false for local development
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7, // expired in 1 week
+        sameSite:'none',
+        path:'/'
     },
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI as string,
