@@ -37,6 +37,7 @@ app.use(cors({
 app.options('*', cors({
     origin: ['http://localhost:5173', 'http://localhost:3000', 'https://thumblify-blush.vercel.app'],
     credentials: true,
+    
 }));
 
 app.use(session({
@@ -48,11 +49,12 @@ app.use(session({
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
         sameSite: 'none',
+        path: '/'
     },
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI as string,
         collectionName: "sessions",
-        touchAfter: 24 * 3600, // lazy session update
+        
     }),
 }));
 
