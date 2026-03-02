@@ -26,26 +26,27 @@ if (!process.env.MONGODB_URI) {
     console.error('MONGODB_URI is not defined');
 }
 
-// Middleware
-app.use(cors({
+// CORS Configuration - MUST be first middleware
+const corsOptions = {
     origin: ['http://localhost:5173', 'http://localhost:3000', 'https://thumblify-blush.vercel.app'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    exposedHeaders: ['Set-Cookie']
+};
 
-app.options('*', cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'https://thumblify-blush.vercel.app'],
-    credentials: true,
-    
-}));
+// Handle CORS preflight for all routes
+app.options('*', cors(corsOptions));
+
+// Apply CORS to all requests
+app.use(cors(corsOptions));
 
 app.use(session({
     secret: process.env.SESSION_SECRET as string,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: true, // Always true for Vercel (uses HTTPS)
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
         sameSite: 'none',
@@ -54,7 +55,12 @@ app.use(session({
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI as string,
         collectionName: "sessions",
-        
+        touchAfter: 24 * 3600,
+        autoRemove: 'native',
+        autoRemoveInterval: 10,
+        crypto: {
+            secret: process.env.SESSION_SECRET as string
+        }
     }),
 }));
 
