@@ -35,10 +35,7 @@ const corsOptions = {
     exposedHeaders: ['Set-Cookie']
 };
 
-// Handle CORS preflight for all routes
-app.options('*', cors(corsOptions));
-
-// Apply CORS to all requests
+// Apply CORS to all requests (automatically handles preflight OPTIONS)
 app.use(cors(corsOptions));
 
 app.use(session({
