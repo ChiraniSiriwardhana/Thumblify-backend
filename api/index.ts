@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from "cors";
 import connectDB from "../configs/db.js";
 import session from "express-session";
@@ -17,6 +17,14 @@ declare module "express-session" {
 
 const app = express();
 app.set('trust proxy', 1);
+
+// Check required environment variables
+if (!process.env.SESSION_SECRET) {
+    console.error('SESSION_SECRET is not defined');
+}
+if (!process.env.MONGODB_URI) {
+    console.error('MONGODB_URI is not defined');
+}
 
 // Middleware
 app.use(cors({
@@ -44,32 +52,46 @@ app.use(session({
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI as string,
         collectionName: "sessions",
+        touchAfter: 24 * 3600, // lazy session update
     }),
 }));
 
 app.use(express.json());
 
-// Connect to DB before handling requests
-let dbConnected = false;
-app.use(async (req, res, next) => {
-    if (!dbConnected) {
-        try {
-            await connectDB();
-            dbConnected = true;
-        } catch (error) {
-            console.error('Database connection failed:', error);
-            return res.status(500).json({ error: 'Database connection failed' });
-        }
-    }
-    next();
-});
-
 app.get('/', (req: Request, res: Response) => {
     res.send('Server is Live!');
 });
 
-app.use("/api/auth", AuthRouter);
-app.use("/api/thumbnail", ThumbnailRouter);
-app.use('/api/user', UserRouter);
+// Connect to DB before handling requests (for serverless)
+let dbConnected = false;
+const ensureDbConnection = async (req: Request, res: Response, next: any) => {
+    if (!dbConnected) {
+        try {
+            await connectDB();
+            dbConnected = true;
+            console.log('Database connected successfully');
+        } catch (error) {
+            console.error('Database connection failed:', error);
+            return res.status(500).json({ 
+                error: 'Database connection failed',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }
+    next();
+};
+
+app.use("/api/auth", ensureDbConnection, AuthRouter);
+app.use("/api/thumbnail", ensureDbConnection, ThumbnailRouter);
+app.use('/api/user', ensureDbConnection, UserRouter);
+
+// Global error handler
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error('Global error handler:', err);
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error',
+        ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+    });
+});
 
 export default app;
