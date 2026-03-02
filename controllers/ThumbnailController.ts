@@ -100,11 +100,12 @@ export const generateThumbnail = async (req: Request, res: Response) => {
 
         console.log('Image buffer size:', finalBuffer.length);
 
+        // Use /tmp directory for Vercel serverless (only writable directory)
         const filename = `final-output-${Date.now()}.png`;
-        const filePath = path.join('images', filename);
+        const filePath = path.join('/tmp', filename);
 
-        //create the images directory if it doesnt exist
-        fs.mkdirSync('images', { recursive: true });
+        // No need to create /tmp directory - it always exists in serverless
+        console.log('Writing image to:', filePath);
 
         //Write the final image to the file
         fs.writeFileSync(filePath, finalBuffer);
