@@ -16,11 +16,19 @@ declare module "express-session" {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
-    origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://localhost:3000'],
-    credentials: true
+    origin: ['http://localhost:5173', 'http://localhost:3000', 'https://thumblify-blush.vercel.app'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.options('*', cors({
+    origin: ['http://localhost:5173', 'http://localhost:3000', 'https://thumblify-blush.vercel.app'],
+    credentials: true,
 }));
 
 app.use(session({
@@ -31,6 +39,7 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+        sameSite: 'none',
     },
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI as string,
